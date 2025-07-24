@@ -1,48 +1,53 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-
+import path from "path";
 import notesRoutes from "./routes/notesRoute.js";
 import { connectDB } from "./config/db.js";
 import rateLimiter from "./middleware/rateLimiter.js";
+import { fileURLToPath } from "url";
 
+// Setup __dirname in ES module context
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-  
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-
-
-// middleware
-app.use(
+// CORS middleware (only in development)
+if (process.env.NODE_ENV !== "production") {
+  app.use(
     cors({
-        origin: "http://localhost:5173",
+      origin: "http://localhost:5173", // Vite default port
+      credentials: true,
     })
-);
-app.use(express.json()); // this middleware will parse JSON bodies: req.body
-app.use(rateLimiter);
+  );
+}
 
-//our simple custom middleware
-// app.use((req, res, next) => {
-//     console.log(`Req method is ${req.method} & Req URL is ${req.url}`);
-//     next();
-// })
+app.use(express.json()); // Parse JSON request body
+app.use(rateLimiter);    // Rate limiter middleware
 
+// Routes
 app.use("/api/notes", notesRoutes);
 
-// What is an endpoint?
-// Aan endpoint is a combination of a URL + HTTP method that lets the client
-// interact with a specific resource.
+// Serve frontend in production
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
-connectDB().then(() => {
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+  });
+}
 
+// Connect to DB and start server
+connectDB()
+  .then(() => {
     app.listen(PORT, () => {
-        console.log("Server started on PORT:", PORT);
+      console.log(`✅ Server started on PORT: ${PORT}`);
     });
-    
-});
-
-
-
+  })
+  .catch((err) => {
+    console.error("❌ Failed to connect to DB:", err);
+  });
